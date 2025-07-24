@@ -1,0 +1,59 @@
+{% extends 'station/base.html' %}
+{% load static %}
+{% block title %}Home - Your Radio Station{% endblock %}
+{% block head %}
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <script src="{% static 'station/home.js' %}"></script>
+    <link rel="stylesheet" href="{% static 'station/home.css' %}">
+{% endblock %}
+{% block content %}
+    <h1>🎵 Welcome to Your Radio Station</h1>
+    
+    {% if user.is_authenticated %}
+        <div style="background-color: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h2>Hello, {{ user.username }}! 👋</h2>
+            <p>You are now logged in and can access all features of the radio station.</p>
+        </div>
+        
+        {% if not user.userprofile.connected_to_spotify %}
+            <div style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <p>Looks like you haven't connected your Spotify account yet. Click <a href="{% url 'station:connect_spotify' %}">here</a> to connect.</p>
+            </div>
+        {% else %}
+            <div id="now-playing" class="now-playing-container">
+                <h2>🎵 Now Playing</h2>
+                <div id="track-info" class="track-info">
+                    <p id="track-status">No track currently playing</p>
+                    <div id="track-details" style="display: none;">
+                        <h3 id="track-name"></h3>
+                        <p id="artist-name"></p>
+                        <p id="album-name"></p>
+                    </div>
+                </div>
+                <button id="refresh-track" class="btn">🔄 Refresh</button>
+            </div>
+            <audio id="voice-audio" controls></audio>
+
+            <!-- Control Buttons -->
+            <div class="controls">
+                <button id="start-stop-button" class="btn">
+                    Stop
+                </button>
+                <button id="play-button" class="btn">
+                    Play
+                </button>
+            </div>
+
+        {% endif %}
+
+    {% else %}
+        <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h2>Welcome to Your Radio Station!</h2>
+            <p>Discover great music.</p>
+            <p>
+                <a href="{% url 'station:login' %}" class="btn">Login</a>
+                <a href="{% url 'station:register' %}" class="btn btn-secondary">Create Account</a>
+            </p>
+        </div>
+    {% endif %}
+{% endblock %}

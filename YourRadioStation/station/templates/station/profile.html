@@ -1,0 +1,47 @@
+<!-- filepath: /Users/christopher/Desktop/Your Music Station/YourRadioStation/station/templates/station/profile.html -->
+{% extends 'station/base.html' %}
+
+{% block title %}Profile - Your Music Station{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>User Profile</h2>
+        
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title">Account Information</h5>
+                <p><strong>Username:</strong> {{ user.username }}</p>
+                <p><strong>Email:</strong> {{ user.email|default:"Not provided" }}</p>
+                <p><strong>Member since:</strong> {{ user.date_joined|date:"F d, Y" }}</p>
+                <p><strong>Last login:</strong> {{ user.last_login|date:"F d, Y H:i" }}</p>
+
+                <h3>Linked Spotify Account</h3> 
+                {% if profile.connected_to_spotify %}
+                    <p><strong>Spotify Username:</strong> {{ profile.spotify_display_name | default:"Not connected" }}</p>
+                    <p><strong>Spotify Email:</strong> {{ profile.spotify_email|default:"Not connected" }}</p>
+                    <p><strong>Spotify Subscription:</strong> {{ profile.spotify_subscription|default:"Not connected" }}</p>
+                    <div class="mt-3">
+                        <a href="{% url 'station:disconnect_spotify' %}" class="btn btn-warning">
+                            Disconnect Spotify
+                        </a>
+                    </div>
+                {% else %}
+                    <p>You have not connected your Spotify account yet. Connect your account <a href="{% url 'station:connect_spotify' %}">here</a>.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Quick Actions</h5>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'station:home' %}" class="btn btn-primary">Home</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

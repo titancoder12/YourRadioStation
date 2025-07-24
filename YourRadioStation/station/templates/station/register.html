@@ -1,0 +1,67 @@
+{% extends 'station/base.html' %}
+
+{% block title %}Register - Your Radio Station{% endblock %}
+
+{% block content %}
+    <h1>🎵 Create Your Account</h1>
+    
+    <div style="max-width: 400px; margin: 0 auto;">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="{{ form.username.id_for_label }}">Username:</label>
+                {{ form.username }}
+                {% if form.username.errors %}
+                    <div style="color: red; font-size: 14px;">
+                        {% for error in form.username.errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if form.username.help_text %}
+                    <small style="color: #666;">{{ form.username.help_text }}</small>
+                {% endif %}
+            </div>
+            
+            <div class="form-group">
+                <label for="{{ form.password1.id_for_label }}">Password:</label>
+                {{ form.password1 }}
+                {% if form.password1.errors %}
+                    <div style="color: red; font-size: 14px;">
+                        {% for error in form.password1.errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if form.password1.help_text %}
+                    <small style="color: #666;">{{ form.password1.help_text }}</small>
+                {% endif %}
+            </div>
+            
+            <div class="form-group">
+                <label for="{{ form.password2.id_for_label }}">Confirm Password:</label>
+                {{ form.password2 }}
+                {% if form.password2.errors %}
+                    <div style="color: red; font-size: 14px;">
+                        {% for error in form.password2.errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if form.password2.help_text %}
+                    <small style="color: #666;">{{ form.password2.help_text }}</small>
+                {% endif %}
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn">Create Account</button>
+                <a href="{% url 'station:home' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+        
+        <div style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p>Already have an account? <a href="{% url 'station:login' %}">Login here</a></p>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends 'station/base.html' %}
+
+{% block title %}Connect Spotify - Your Radio Station{% endblock %}
+
+{% block content %}
+    <h1>🎵 Connect Your Spotify Account</h1>
+    
+    <div style="max-width: 400px; margin: 0 auto;">
+        <p>To connect your Spotify account, please click the button below:</p>
+        
+        {% if user_data %}
+            <h2>Welcome, {{ user_data.display_name }}</h2>
+            <p>Email: {{ user_data.email }}</p>
+            <p>Spotify ID: {{ user_data.id }}</p>
+            <img src="{{ user_data.images.0.url }}" alt="Profile picture" width="100">
+            <p><strong>Subscription:</strong> {{ user_data.product|capfirst }}</p>
+        {% else %}
+            <a href="{% url 'station:connect_spotify' %}">Connect to Spotify</a>
+        {% endif %}
+        
+        <div style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p><a href="{% url 'station:home' %}">Back to Home</a></p>
+        </div>
+    </div>
+{% endblock %}
