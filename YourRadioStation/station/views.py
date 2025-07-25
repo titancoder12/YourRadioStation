@@ -21,6 +21,7 @@ import requests
 from gtts import gTTS
 from groq import Groq
 import os
+
 def home(request):
     """Home page view - shows different content for logged in vs anonymous users"""
     return render(request, 'station/home.html')
@@ -245,39 +246,74 @@ def get_valid_spotify_token(user):
     try:
         profile = user.userprofile
         if not profile.spotify_access_token:
+            print("No access token found")
             return None
         
-        # Try to use the current token first
+        # Check if token is expired before making API calls
+        if profile.spotify_token_expires_at and profile.spotify_token_expires_at <= timezone.now():
+            print("Token expired, attempting refresh...")
+            if profile.spotify_refresh_token:
+                new_token = refresh_spotify_token(profile.spotify_refresh_token)
+                if new_token:
+                    # Update token and expiry time
+                    profile.spotify_access_token = new_token
+                    profile.spotify_token_expires_at = timezone.now() + timedelta(hours=1)
+                    profile.save()
+                    print("Token refreshed successfully")
+                    return new_token
+                else:
+                    print("Token refresh failed")
+                    return None
+            else:
+                print("No refresh token available")
+                return None
+        
+        # Test the current token
         sp = spotipy.Spotify(auth=profile.spotify_access_token)
         try:
-            # Test the token by making a simple API call
             sp.current_user()
             return profile.spotify_access_token
-        except:
-            # Token might be expired, try to refresh
+        except spotipy.exceptions.SpotifyException as e:
+            print(f"Token validation failed: {e}")
+            # Try to refresh token
             if profile.spotify_refresh_token:
                 new_token = refresh_spotify_token(profile.spotify_refresh_token)
                 if new_token:
                     profile.spotify_access_token = new_token
+                    profile.spotify_token_expires_at = timezone.now() + timedelta(hours=1)
                     profile.save()
                     return new_token
             return None
-    except:
+            
+    except Exception as e:
+        print(f"Error in get_valid_spotify_token: {e}")
         return None
 
 def refresh_spotify_token(refresh_token):
     """Refresh Spotify access token using refresh token"""
     token_url = 'https://accounts.spotify.com/api/token'
+    
+    # Use proper authorization header instead of form data
+    import base64
+    client_credentials = f"{settings.SPOTIFY_CLIENT_ID}:{settings.SPOTIFY_CLIENT_SECRET}"
+    client_credentials_b64 = base64.b64encode(client_credentials.encode()).decode()
+    
+    headers = {
+        'Authorization': f'Basic {client_credentials_b64}',
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    
     token_data = {
         'grant_type': 'refresh_token',
         'refresh_token': refresh_token,
-        'client_id': settings.SPOTIFY_CLIENT_ID,
-        'client_secret': settings.SPOTIFY_CLIENT_SECRET,
     }
     
     try:
-        response = requests.post(token_url, data=token_data)
+        response = requests.post(token_url, headers=headers, data=token_data)
         token_info = response.json()
+        
+        print(f"Token refresh response: {response.status_code}")
+        print(f"Token info: {token_info}")
         
         if response.status_code == 200:
             return token_info.get('access_token')
@@ -419,7 +455,7 @@ def transfer_playback(request):
 
 def get_voice(request, just_played, next_song):
     """Example Groq API call"""
-    groq = Groq(api_key=os.environ.get["GROK_API_KEY"])
+    groq = Groq(api_key=settings.GROQ_API_KEY)
     
     chat_completion = groq.chat.completions.create(
         messages=[
@@ -429,7 +465,7 @@ def get_voice(request, just_played, next_song):
             },
             {
                 "role": "system", 
-                "content": "You are a experienced radio disk jockey. You will be given a song and you will tell the user about the song, the artist, and the album. You will also give a brief description of the song.",
+                "content": "You are a experienced radio disk jockey. You will be given a song and you will tell the user about the song, the artist, and the album. You will also give a brief description of the song. Your station is called YourRadioStation.",
             },
         ],
         model="llama3-8b-8192",
@@ -562,5 +598,63 @@ def get_next_track(request):
             'has_next_track': next_track is not None
         })
         
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def next(request):
+    # Logic to get the next track
+    if not request.user.is_authenticated or not request.user.userprofile.connected_to_spotify:
+        return JsonResponse({'error': 'User not connected to Spotify'}, status=403)
+
+    try:
+        access_token = get_valid_spotify_token(request.user)
+        if not access_token:
+            return JsonResponse({'error': 'Failed to get valid Spotify token'}, status=401)
+        sp = spotipy.Spotify(auth=access_token)
+        current_track = sp.current_playback()
+        if not current_track:
+            return JsonResponse({'error': 'No track is currently playing'}, status=400)
+
+        # Get the next track from the Spotify API
+        next_track = sp.next_track()
+        if not next_track:
+            return JsonResponse({'error': 'No next track available'}, status=404)
+
+        return JsonResponse({
+            'next_track_id': next_track['id'],
+            'next_track_name': next_track['name'],
+            'next_artist_name': ', '.join(artist['name'] for artist in next_track['artists']),
+            'has_next_track': True
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    
+@login_required
+def finished_song(request):
+    """Handle the end of a song"""
+    if not request.user.is_authenticated or not request.user.userprofile.connected_to_spotify:
+        return JsonResponse({'error': 'User not connected to Spotify'}, status=403)
+
+    try:
+        access_token = get_valid_spotify_token(request.user)
+        if not access_token:
+            return JsonResponse({'error': 'Failed to get valid Spotify token'}, status=401)
+        
+        sp = spotipy.Spotify(auth=access_token)
+        playback = sp.current_playback()
+        if playback and playback['item']:
+            progress_ms = playback.get('progress_ms', 0)
+            duration_ms = playback['item'].get('duration_ms', 0)
+            if duration_ms > 0 and progress_ms >= duration_ms - 1000:  # within 1 second of end
+                sp.pause()
+            else:
+                return JsonResponse({'status': 'not_finished', 'message': 'Song is still playing'})
+        else:
+            return JsonResponse({'error': 'No track currently playing'}, status=400)
+        
+        return JsonResponse({'status': 'success', 'message': 'Skipped to next track'})
+    
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

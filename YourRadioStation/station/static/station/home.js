@@ -1,11 +1,18 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded');
+    
+    // Declare all variables at the top
     let currentTrackInfo = {
-      id: null,
-      name: null,
-      artist: null,
-      progress: null
+        id: null,
+        name: null,
+        artist: null,
+        progress: null
     };
+    
+    let previousTrackInfo = null;
+    let refreshInterval = null; // Declare this variable
+    let checkInterval = null;   // Declare this variable
+    let currentAudio = null;    // Declare for audio management
 
     function play() {
         fetch('/api/play/', {
@@ -40,74 +47,160 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error:', error);
         });
     }
-    // Function to handle track change
-    previousTrackName = 'No song here. This is the start of the show!';
-    function onTrackChange(data, previousTrackInfo) {
-        // Pause the current track
-        fetch('/api/pause/', {
+
+    function next() {
+        fetch('/api/next/', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
             }
         })
-        .then(response => {
-            console.log('Pause response:', response);
+        .then(response => response.json())
+        .then(data => {
+            console.log('Next response:', data);
+            getCurrentTrack(); // Refresh track info after next
         })
         .catch(error => {
-            console.error('Error pausing track:', error);
-        }).then(() => {
-            // Get the next track using the helper function
-            fetch('/api/get-next-track/')
-                .then(response => response.json())
-                .then(nextTrackData => {
-                    const previousTrackName = previousTrackInfo && previousTrackInfo.name ? 
-                        previousTrackInfo.name : 'No previous song';
-                    const nextTrackName = nextTrackData.next_track_name || 'Unknown next song';
-
-                    console.log(`Transitioning from "${previousTrackName}" to "${data.name}" with "${nextTrackName}" coming up next`);
-
-                    // Call voice API with current song and next song
-                    fetch(`/api/get-voice/${encodeURIComponent(data.name)}/${encodeURIComponent(nextTrackName)}/`)
-                      .then(response => response.json())
-                      .then(voiceData => {
-                        if (voiceData.error) {
-                          console.error('Error fetching voice:', voiceData.error);
-                        } else {
-                          console.log('Voice data:', voiceData);
-                          const audioElement = document.getElementById('voice-audio');
-                          if (audioElement) {
-                            audioElement.src = voiceData.audio_url;
-                            audioElement.type = 'audio/mp3';
-                            audioElement.play().catch(err => {
-                              console.error('Error playing audio:', err);
-                            });
-                          }
-                        }
-                      })
-                      .catch(error => {
-                        console.error('Error fetching voice:', error);
-                      });
-                })
-                .catch(error => {
-                    console.error('Error fetching next track:', error);
-                    // Fallback to unknown next song
-                    const previousTrackName = previousTrackInfo && previousTrackInfo.name ? 
-                        previousTrackInfo.name : 'No previous song';
-                    const nextTrackName = 'Unknown next song';
-
-                    fetch(`/api/get-voice/${encodeURIComponent(data.name)}/${encodeURIComponent(nextTrackName)}/`)
-                      .then(response => response.json())
-                      .then(voiceData => {
-                        // Handle voice response...
-                      });
-                });
+            console.error('Error:', error);
         });
     }
 
-    // Auto-refresh every 5 seconds
+    function getVoice(previousTrackName, currentTrackName) {
+        console.log(`Generating voice for: "${previousTrackName}" to "${currentTrackName}"`);
+        
+        // URL encode the track names
+        const encodedPrev = encodeURIComponent(previousTrackName);
+        const encodedCurr = encodeURIComponent(currentTrackName);
+        
+        fetch(`/api/get-voice/${encodedPrev}/${encodedCurr}/`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Voice generation response:', data);
+            if (data.audio_url) {
+                // Stop any currently playing audio
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+                
+                currentAudio = new Audio(data.audio_url);
+                
+                currentAudio.addEventListener('ended', function() {
+                    console.log('Voice finished, resuming music...');
+                    play();
+                    currentAudio = null;
+                });
+                
+                currentAudio.addEventListener('error', function() {
+                    console.error('Audio playback error');
+                    play();
+                    currentAudio = null;
+                });
+                
+                currentAudio.play().catch(err => {
+                    console.error('Error playing audio:', err);
+                    play();
+                    currentAudio = null;
+                });
+            } else {
+                console.log('No voice URL returned.');
+                play(); // Resume music anyway
+            }
+        })
+        .catch(error => {
+            console.error('Error generating voice:', error);
+            play(); // Resume music on error
+        });
+    }
+
+    function onTrackChange(currentTrack, previousTrack) {
+        console.log('🎵 Track changed!');
+        pause();
+        console.log('Current track:', currentTrack?.name || 'Unknown');
+        console.log('Previous track:', previousTrack?.name || 'None');
+        
+        // Update UI with null check
+        const nowPlayingDiv = document.getElementById('now-playing');
+        if (nowPlayingDiv) {
+            nowPlayingDiv.innerHTML = `
+                <h2>Now Playing</h2>
+                <p id="track-name">${currentTrack.name}</p>
+                <p id="artist-name">by ${currentTrack.artist}</p>
+            `;
+        } else {
+            console.warn('now-playing element not found');
+        }
+
+        // Only call getVoice if we have a valid previous track
+        if (previousTrack && previousTrack.name) {
+            const prevName = `${previousTrack.name} by ${previousTrack.artist}`;
+            const currName = `${currentTrack.name} by ${currentTrack.artist}`;
+
+            console.log(`Generating voice: "${prevName}" to "${currName}"`);
+            getVoice(prevName, currName);
+        } else {
+            console.log('No previous track - skipping voice generation');
+            play(); // Resume music if no voice needed
+        }
+    }
+
+    function getCurrentTrack() {
+        fetch('/api/get-playing-track/')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error('Error fetching track:', data.error);
+                    return;
+                }
+
+                // Create new track info object
+                const newTrackInfo = {
+                    id: data.track_id,
+                    name: data.track_name,
+                    artist: data.artist_name,
+                    progress: data.progress_ms
+                };
+
+                console.log('Currently playing:', newTrackInfo.name, 'by', newTrackInfo.artist);
+
+                // Check for track change BEFORE updating currentTrackInfo
+                if (currentTrackInfo.id && currentTrackInfo.id !== newTrackInfo.id) {
+                    console.log('Track change detected!');
+                    onTrackChange(newTrackInfo, currentTrackInfo); // New track, old track
+                }
+
+                // Update current track info
+                currentTrackInfo = newTrackInfo;
+
+                // Update UI elements with null checks
+                const trackNameEl = document.getElementById('track-name');
+                const artistNameEl = document.getElementById('artist-name');
+                
+                if (trackNameEl) trackNameEl.textContent = currentTrackInfo.name;
+                if (artistNameEl) artistNameEl.textContent = `by ${currentTrackInfo.artist}`;
+            })
+            .catch(error => {
+                console.error('Error fetching track:', error);
+            });
+    }
+
     function startAutoRefresh() {
+        // Clear any existing intervals
+        if (refreshInterval) clearInterval(refreshInterval);
+        if (checkInterval) clearInterval(checkInterval);
+        
+        console.log('Starting auto-refresh...');
         getCurrentTrack(); // Get immediately
-        setInterval(getCurrentTrack, 1000); // Then every 1 second
+        
+        // Single interval that handles both fetching and checking
+        refreshInterval = setInterval(() => {
+            getCurrentTrack();
+        }, 2000); // Check every 2 seconds
     }
 
     // Manual refresh button
@@ -132,55 +225,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Start auto-refresh if user is connected to Spotify
-    const nowPlayingDiv = document.getElementById('now-playing');
-    if (nowPlayingDiv) {
-        startAutoRefresh();
+    // Next button
+    const nextButton = document.getElementById('next-button');
+    if (nextButton) {
+        nextButton.addEventListener('click', function() {
+            next();
+        });
     }
 
-    function getCurrentTrack() {
-        fetch('/api/get-playing-track/')
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    console.error('Error fetching track:', data.error);
-                    return;
-                }
-
-                currentTrackInfo.id = data.track_id;
-                currentTrackInfo.name = data.track_name;
-                currentTrackInfo.artist = data.artist_name;
-                currentTrackInfo.progress = data.progress;
-                console.log('Currently playing track:', currentTrackInfo.name, 'by', currentTrackInfo.artist);
-
-                // Update UI elements
-                document.getElementById('track-name').textContent = currentTrackInfo.name;
-                document.getElementById('artist-name').textContent = `by ${currentTrackInfo.artist}`;
-            })
-            .catch(error => {
-                console.error('Error fetching track:', error);
-            });
-        return currentTrackInfo;
-    }
-
-    let last_track_id = null;
-
-    function checkTrackChange() {
-        if (currentTrackInfo.id !== last_track_id && currentTrackInfo.id !== null) {
-            onTrackChange(currentTrackInfo, last_track_id);
-            console.log('Track changed!');
-            last_track_id = currentTrackInfo.id;
-            
-        }
-    }
-
-    // Start auto-refresh and check for track changes every second
+    // Start auto-refresh
     startAutoRefresh();
-    setInterval(checkTrackChange, 1000);
 });
 
 // Spotify SDK callback
 window.onSpotifyWebPlaybackSDKReady = () => {
     console.log('Spotify SDK Ready!');
 };
-

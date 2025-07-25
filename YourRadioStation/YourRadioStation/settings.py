@@ -12,12 +12,16 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 
 from pathlib import Path
 import os
-
+from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+dotenv_path = BASE_DIR / '.env'
+load_dotenv(dotenv_path)
+
 SPOTIFY_CLIENT_ID = '071d95b665fd4e128e423801afc4460b'
-SPOTIFY_CLIENT_SECRET = os.environ.get['SPOTIFY_CLIENT_SECRET']
+SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')  # Ensure GROQ API key is set in environment
 SPOTIFY_REDIRECT_URI = 'http://127.0.0.1:8000/callback'  # Added :8000
 SPOTIFY_SCOPES = 'user-read-playback-state user-modify-playback-state streaming user-read-email user-read-private user-read-currently-playing user-read-recently-played user-top-read playlist-read-private playlist-modify-public playlist-modify-private'
 # Quick-start development settings - unsuitable for production

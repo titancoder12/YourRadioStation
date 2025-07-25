@@ -20,6 +20,29 @@
                     <p>Looks like you haven't connected your Spotify account yet. Click <a href="{% url 'station:connect_spotify' %}">here</a> to connect.</p>
             </div>
         {% else %}
+            <div id="spotify-player-container" style="margin: 30px auto; text-align: center;">
+                <h2>Spotify Web Player</h2>
+                <script>
+                    window.onSpotifyWebPlaybackSDKReady = () => {
+                        const token = "{{ user.userprofile.spotify_access_token }}";
+                        const player = new Spotify.Player({
+                            name: 'Your Radio Station Player',
+                            getOAuthToken: cb => { cb(token); },
+                            volume: 0.8
+                        });
+
+                        player.addListener('ready', ({ device_id }) => {
+                            document.getElementById('spotify-player').innerHTML = `<p>Spotify Player is ready!</p>`;
+                        });
+
+                        player.addListener('not_ready', ({ device_id }) => {
+                            document.getElementById('spotify-player').innerHTML = `<p>Spotify Player is offline</p>`;
+                        });
+
+                        player.connect();
+                    };
+                </script>
+            </div>
             <div id="now-playing" class="now-playing-container">
                 <h2>🎵 Now Playing</h2>
                 <div id="track-info" class="track-info">
@@ -42,6 +65,8 @@
                 <button id="play-button" class="btn">
                     Play
                 </button>
+                <button id="next-button" class="btn">
+                    Next Song
             </div>
 
         {% endif %}

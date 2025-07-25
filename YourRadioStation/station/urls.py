@@ -20,4 +20,6 @@ urlpatterns = [
     path('api/get-playing-track/', views.get_playing_track, name='get_playing_track'),
     path('api/get-voice/<str:just_played>/<str:next_song>/', views.get_voice, name='get_voice'),
     path('api/get-next-track/', views.get_next_track, name='get_next_track'),
+    path('api/next/', views.next, name='next'),
+    path('api/finished-song/', views.finished_song, name='finished_song'),
 ]
