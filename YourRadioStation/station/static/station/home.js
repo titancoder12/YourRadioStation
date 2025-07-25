@@ -1,18 +1,20 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded');
     
-    // Declare all variables at the top
+    // Declare ALL variables at the top level
     let currentTrackInfo = {
         id: null,
         name: null,
         artist: null,
-        progress: null
+        progress: null,
+        duration: null
     };
     
     let previousTrackInfo = null;
-    let refreshInterval = null; // Declare this variable
-    let checkInterval = null;   // Declare this variable
-    let currentAudio = null;    // Declare for audio management
+    let refreshInterval = null;
+    let checkInterval = null;
+    let currentAudio = null;    // ← ADD THIS DECLARATION
+    let isTransitioning = false;
 
     function play() {
         fetch('/api/play/', {
@@ -24,7 +26,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             console.log('Play response:', data);
-            getCurrentTrack(); // Refresh track info after play
         })
         .catch(error => {
             console.error('Error:', error);
@@ -41,24 +42,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             console.log('Pause response:', data);
-            getCurrentTrack(); // Refresh track info after pause
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
-    }
-
-    function next() {
-        fetch('/api/next/', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Next response:', data);
-            getCurrentTrack(); // Refresh track info after next
         })
         .catch(error => {
             console.error('Error:', error);
@@ -66,6 +49,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getVoice(previousTrackName, currentTrackName) {
+        // Prevent multiple voice generations
+        if (isTransitioning) {
+            console.log('Already transitioning, skipping voice generation');
+            return;
+        }
+        
+        isTransitioning = true;
         console.log(`Generating voice for: "${previousTrackName}" to "${currentTrackName}"`);
         
         // URL encode the track names
@@ -88,39 +78,52 @@ document.addEventListener('DOMContentLoaded', function() {
                     currentAudio = null;
                 }
                 
+                // Create new audio element
                 currentAudio = new Audio(data.audio_url);
                 
+                // Handle audio events
                 currentAudio.addEventListener('ended', function() {
                     console.log('Voice finished, resuming music...');
+                    isTransitioning = false;  // Reset flag
                     play();
                     currentAudio = null;
                 });
                 
-                currentAudio.addEventListener('error', function() {
-                    console.error('Audio playback error');
+                currentAudio.addEventListener('error', function(e) {
+                    console.error('Audio playback error:', e);
+                    isTransitioning = false;  // Reset flag
                     play();
                     currentAudio = null;
                 });
                 
+                // Play the audio
                 currentAudio.play().catch(err => {
                     console.error('Error playing audio:', err);
+                    isTransitioning = false;  // Reset flag
                     play();
                     currentAudio = null;
                 });
             } else {
                 console.log('No voice URL returned.');
+                isTransitioning = false;  // Reset flag
                 play(); // Resume music anyway
             }
         })
         .catch(error => {
             console.error('Error generating voice:', error);
+            isTransitioning = false;  // Reset flag
             play(); // Resume music on error
         });
     }
 
     function onTrackChange(currentTrack, previousTrack) {
         console.log('🎵 Track changed!');
-        pause();
+        
+        // Only pause if not already transitioning
+        if (!isTransitioning) {
+            pause();
+        }
+        
         console.log('Current track:', currentTrack?.name || 'Unknown');
         console.log('Previous track:', previousTrack?.name || 'None');
         
@@ -136,16 +139,18 @@ document.addEventListener('DOMContentLoaded', function() {
             console.warn('now-playing element not found');
         }
 
-        // Only call getVoice if we have a valid previous track
-        if (previousTrack && previousTrack.name) {
+        // Only call getVoice if we have a valid previous track and not already transitioning
+        if (previousTrack && previousTrack.name && !isTransitioning) {
             const prevName = `${previousTrack.name} by ${previousTrack.artist}`;
             const currName = `${currentTrack.name} by ${currentTrack.artist}`;
 
             console.log(`Generating voice: "${prevName}" to "${currName}"`);
             getVoice(prevName, currName);
         } else {
-            console.log('No previous track - skipping voice generation');
-            play(); // Resume music if no voice needed
+            console.log('No previous track or already transitioning - skipping voice generation');
+            if (!isTransitioning) {
+                play(); // Resume music if no voice needed
+            }
         }
     }
 
@@ -163,13 +168,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     id: data.track_id,
                     name: data.track_name,
                     artist: data.artist_name,
-                    progress: data.progress_ms
+                    progress: data.progress_ms,
+                    duration: data.duration_ms
                 };
 
                 console.log('Currently playing:', newTrackInfo.name, 'by', newTrackInfo.artist);
 
                 // Check for track change BEFORE updating currentTrackInfo
-                if (currentTrackInfo.id && currentTrackInfo.id !== newTrackInfo.id) {
+                if (currentTrackInfo.id && currentTrackInfo.id !== newTrackInfo.id && !isTransitioning) {
                     console.log('Track change detected!');
                     onTrackChange(newTrackInfo, currentTrackInfo); // New track, old track
                 }
@@ -200,7 +206,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Single interval that handles both fetching and checking
         refreshInterval = setInterval(() => {
             getCurrentTrack();
-        }, 2000); // Check every 2 seconds
+        }, 1000); // Check every second for faster detection
     }
 
     // Manual refresh button
