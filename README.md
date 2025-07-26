@@ -1,4 +1,5 @@
 # YourRadioStation 🎵
+![YourRadioStation](https://raw.githubusercontent.com/titancoder12/YourRadioStation/refs/heads/main/Screen%20Shot%202025-07-25%20at%207.41.50%20PM.png)
 
 A Django-powered web application that creates an AI-powered radio station experience using your Spotify account. Listen to music with intelligent DJ voice transitions powered by AI.
 
